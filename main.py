@@ -11,28 +11,45 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-MIN_TEXT_LENGTH = 50
-MAX_TEXT_LENGTH = 2048
+MIN_TEXT_LENGTH = 200
+MAX_TEXT_LENGTH = 3500
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/91.0.864.48",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+]
+
+SEARCH_ENGINES = [
+    f"https://www.google.com/search?q=",
+    f"https://duckduckgo.com/html/?q=",
+    f"https://www.bing.com/search?q=",
+    f"https://search.yahoo.com/search?p=",
+    f"https://www.ask.com/web?q="
+]
 
 
 class SocialNetwork(Enum):
     """The social networks for which the URLs are extracted."""
-    FACEBOOK = ("Username", "Caption", "site: facebook.com", "https://www.facebook.com/", "URL")
-    INSTAGRAM = ("Username", "Caption", "site: instagram.com", "https://www.instagram.com/", "URL")
-    
-    def get_username_column(self) -> str:
-        return self.value[0]
+    FACEBOOK = ("Caption", "site: facebook.com", "https://www.facebook.com/", "URL", ["posts", "videos", "photo", "groups"])
+    INSTAGRAM = ("Caption", "site: instagram.com", "https://www.instagram.com/", "URL", ["p/", "tv/", "reel/", "video/", "photo/"])
     
     def get_text_column(self) -> str:
-        return self.value[1]
+        return self.value[0]
     
     def get_url_query(self) -> str:
-        return self.value[2]
+        return self.value[1]
     
     def get_post_url(self) -> str:
-        return self.value[3]
+        return self.value[2]
     
     def get_url_column(self) -> str:
+        return self.value[3]
+    
+    def get_valid_substrings(self) -> list:
         return self.value[4]
     
 
@@ -97,47 +114,28 @@ def filter_bmp_characters(text: str) -> str:
 
 def search_with_requests(query: str, social_network: SocialNetwork) -> str:
     """Performs a search using requests and BeautifulSoup and returns the first matching URL."""
-    query_filtered = filter_bmp_characters(query)
-    
-    search_engines = [
-        f"https://www.google.com/search?q={query_filtered}",
-        f"https://duckduckgo.com/html/?q={query_filtered}",
-        f"https://www.bing.com/search?q={query_filtered}",
-        f"https://search.yahoo.com/search?p={query_filtered}",
-        f"https://www.ask.com/web?q={query_filtered}"
-    ]
-    
-    user_agents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/91.0.864.48",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    ]
-    
     headers = {
-        "User-Agent": random.choice(user_agents)
+        "User-Agent": random.choice(USER_AGENTS),
     }
     
+    query_filtered = filter_bmp_characters(query)
+    search_engines = [engine + query_filtered for engine in SEARCH_ENGINES]
+    random.shuffle(search_engines) # Randomize the search order
+    
     for search_url in search_engines:
-        response = requests.get(search_url, headers=headers)
+        response = requests.get(
+            url=search_url, 
+            headers=headers
+        )
         soup = BeautifulSoup(response.text, 'html.parser')
         
         for link in soup.find_all('a', href=True):
             href = link['href']
             
-            if social_network.get_post_url() in href:
-                if social_network == SocialNetwork.FACEBOOK:
-                    valid_substrings = ["posts", "videos", "photo", "groups"]
-                    if any(substring in href for substring in valid_substrings):
-                        return href
-                else:
-                    valid_substrings = ["p/", "tv/", "reel/"]
-                    if any(substring in href for substring in valid_substrings):
-                        return href
+            if social_network.get_post_url() in href and \
+                any(substring in href for substring in social_network.get_valid_substrings()):
+                return href
         time.sleep(random.uniform(1, 3)) 
-    
     return ''
 
 
@@ -175,7 +173,7 @@ def main():
         else:
             print(f"Post da linha {index + 1} não encontrado.")
         
-        time.sleep(random.uniform(2, 6))
+        time.sleep(random.uniform(2, 5))
     
     print(f"Busca finalizada. URLs encontradas: {search_success}/{len(data_posts)}")
     data_posts.to_csv(f'{file_name[:-4]}_with_urls.csv', index=False)
