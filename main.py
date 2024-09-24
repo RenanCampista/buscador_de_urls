@@ -5,6 +5,7 @@ import sys
 import os
 import re
 import time
+import random
 from urllib.parse import urlparse
 import pandas as pd
 import requests
@@ -98,14 +99,25 @@ def search_with_requests(query: str, social_network: SocialNetwork) -> str:
     """Performs a Google search using requests and BeautifulSoup and returns the first matching URL."""
     query_filtered = filter_bmp_characters(query)
     url = f"https://www.google.com/search?q={query_filtered}"
+    
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1"
+    ]
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": random.choice(user_agents)
     }
+    
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
     
     for link in soup.find_all('a', href=True):
         href = link['href']
+        #print(href)
+        
         if social_network.get_post_url() in href:
             if social_network == SocialNetwork.FACEBOOK:
                 valid_substrings = ["posts", "videos", "photo", "groups"]
@@ -150,7 +162,7 @@ def main():
         else:
             print(f"Post da linha {index + 1} não encontrado.")
         
-        time.sleep(3)
+        time.sleep(random.uniform(2, 6))
     
     print(f"Busca finalizada. URLs encontradas: {search_success}/{len(data_posts)}")
     data_posts.to_csv(f'{file_name[:-4]}_with_urls.csv', index=False)
