@@ -34,7 +34,7 @@ SEARCH_ENGINES = [
 
 class SocialNetwork(Enum):
     """The social networks for which the URLs are extracted."""
-    FACEBOOK = ("Caption", "site: facebook.com", "https://www.facebook.com/", "URL", ["posts", "videos", "photo", "groups"])
+    FACEBOOK = ("Caption", "site: facebook.com", "https://www.facebook.com/", "URL", ["posts", "videos", "photos", "groups"])
     INSTAGRAM = ("Caption", "site: instagram.com", "https://www.instagram.com/", "URL", ["p/", "tv/", "reel/", "video/", "photo/"])
     
     def get_text_column(self) -> str:
