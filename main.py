@@ -20,7 +20,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 ]
 MIN_TEXT_LENGTH = 200
-
+GOOGLE_BLOCKED_MESSAGE = "//support.google.com/websearch/answer/86640"
 
 class SearchEngine(Enum):
     """The search engines used to search for the posts."""
@@ -95,7 +95,7 @@ def list_files_and_get_input() -> str:
                 print("Invalid file name. Please try again.")
 
 
-def read_posts_from_extraction(file_path: str, social_network: SocialNetwork) -> pd.DataFrame:
+def read_posts_from_extraction(file_path: str) -> pd.DataFrame:
     """Reads the CSV file with the posts and returns a DataFrame."""
     try:
         return pd.read_csv(file_path)
@@ -115,8 +115,12 @@ def filter_bmp_characters(text: str) -> str:
     return re.sub(r'[^\u0000-\uFFFF]', '', text)
 
 
-def search_with_requests(query: str, social_network: SocialNetwork) -> tuple:
-    """Performs a search using requests and BeautifulSoup and returns the first matching URL and the search engine used."""
+def search_with_requests(query: str, social_network: SocialNetwork, google_control: dict) -> tuple:
+    """
+    Performs a search using requests and BeautifulSoup and returns the first matching URL and the search engine used.
+    First, the search is performed on Bing, then on DuckDuckGo, and finally on Google. 
+    Note that Google has a limit of 10 requests before being suspended for 10 minutes.
+    """
     headers = {
         "User-Agent": random.choice(USER_AGENTS),
     }
@@ -126,14 +130,29 @@ def search_with_requests(query: str, social_network: SocialNetwork) -> tuple:
                       for engine in SearchEngine]
     
     for search_url, engine_name in search_engines:
+        if engine_name == "Google" and google_control['suspended']:
+            if time.time() - google_control['last_request_time'] < google_control['suspend_time']:
+                continue
+            else:
+                google_control['suspended'] = False
+                print("\033[92mLiberando requisições do Google para tentar usar novamente.\033[0m")
+        
         response = requests.get(search_url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         for link in soup.find_all('a', href=True):
             href = link['href']
+        
             if social_network.get_domain_url() in href and \
                 any(substring in href for substring in social_network.get_valid_substrings()):
                 return href, engine_name
+            
+            if GOOGLE_BLOCKED_MESSAGE in href:
+                google_control['suspended'] = True
+                google_control['last_request_time'] = time.time()
+                print("\033[91mGoogle bloqueou as requisições. Aguardando 10 minutos para utilizar novamente.\033[0m")
+                print("\033[93mEnquanto isso, serão utilizados os outros motores de busca.\033[0m")
+                continue
             
         time.sleep(random.uniform(1, 3)) 
     return '', ''
@@ -151,9 +170,17 @@ def main():
     file_name = list_files_and_get_input()
     validate_file_extension(file_name, '.csv')
     
-    data_posts = read_posts_from_extraction(file_name, social_network)
+    data_posts = read_posts_from_extraction(file_name)
     data_posts[social_network.get_url_column()] = ''
     
+    google_requests_control = {
+        # Request control to avoid blocking
+        'suspended': False,
+        'suspend_time': 600,  # 10 minutes
+        'last_request_time': 0
+    }
+    
+    print("Inicializando busca de URLs...\n")
     search_success = 0
     insuficient_text = 0
     for index, row in data_posts.iterrows():
@@ -165,7 +192,7 @@ def main():
             insuficient_text += 1
             continue
         
-        url, se = search_with_requests(query, social_network)
+        url, se = search_with_requests(query, social_network, google_requests_control)
         relevant_url = ''
     
         if url:
