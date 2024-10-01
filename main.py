@@ -21,6 +21,7 @@ USER_AGENTS = [
 ]
 MIN_TEXT_LENGTH = 200
 GOOGLE_BLOCKED_MESSAGE = "//support.google.com/websearch/answer/86640"
+GOOGLE_SUSPEND_TIME = 900  # 15 minutes
 
 class SearchEngine(Enum):
     """The search engines used to search for the posts."""
@@ -176,7 +177,7 @@ def main():
     google_requests_control = {
         # Request control to avoid blocking
         'suspended': False,
-        'suspend_time': 600,  # 10 minutes
+        'suspend_time': GOOGLE_SUSPEND_TIME,
         'last_request_time': 0
     }
     
